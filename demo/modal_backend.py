@@ -28,9 +28,10 @@ PROBES_DIR = Path(VOLUME_PATH) / "probes"
 
 if modal.is_local():
     from dotenv import load_dotenv
-    load_dotenv(Path(__file__).parent.parent)
+    env_path = (Path(__file__).parent.parent) / ".env"
+    load_dotenv(env_path)
     assert os.getenv("HF_TOKEN"), "HF_TOKEN must be set to be able to load Llama models from HuggingFace"
-    LOCAL_HF_TOKEN_SECRET = modal.Secret.from_dict({"HF_TOKEN": os.environ["HF_TOKEN"]})
+    LOCAL_HF_TOKEN_SECRET = modal.Secret.from_name("hf-secret")
 else:
     LOCAL_HF_TOKEN_SECRET = modal.Secret.from_dict({})
 
@@ -129,9 +130,9 @@ def load_probe_head(
     scaledown_window=SCALEDOWN_WINDOW,
     volumes={VOLUME_PATH: VOLUME},
     timeout=TIMEOUT,
-    allow_concurrent_inputs=10,
     secrets=[LOCAL_HF_TOKEN_SECRET],
 )
+@modal.concurrent(max_inputs=10)
 class ProbeInferenceService:
     """Modal service for running hallucination probe inference with vLLM."""
     
@@ -162,6 +163,7 @@ class ProbeInferenceService:
             enforce_eager=True,
             download_dir=VOLUME_PATH,
             tensor_parallel_size=N_GPU,  # Use tensor parallelism across available GPUs
+            quantization=None,  # Disable FP8 to avoid DeepGEMM dependency
         )
         
         # Load tokenizer
